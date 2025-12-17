@@ -1,0 +1,49 @@
+x-frr-node: &frr_node
+  image: quay.io/frrouting/frr:9.1.0
+  privileged: true
+  entrypoint:
+    - /bin/sh
+    - -lc
+    - |
+      mkdir -p /var/run/frr
+      chown -R frr:frr /etc/frr /var/run/frr || true
+      /usr/lib/frr/docker-start
+      tail -f /dev/null
+
+services:
+  spine1:
+    <<: *frr_node
+    container_name: ${LAB_NAME}-spine1
+    hostname: spine1
+    volumes:
+      - ${FRR_DIR}/spine1:/etc/frr
+    networks:
+      fabric:
+        ipv4_address: ${SPINE1_IP}
+
+  leaf1:
+    <<: *frr_node
+    container_name: ${LAB_NAME}-leaf1
+    hostname: leaf1
+    volumes:
+      - ${FRR_DIR}/leaf1:/etc/frr
+    networks:
+      fabric:
+        ipv4_address: ${LEAF1_IP}
+
+  leaf2:
+    <<: *frr_node
+    container_name: ${LAB_NAME}-leaf2
+    hostname: leaf2
+    volumes:
+      - ${FRR_DIR}/leaf2:/etc/frr
+    networks:
+      fabric:
+        ipv4_address: ${LEAF2_IP}
+
+networks:
+  fabric:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${FABRIC_SUBNET}
