@@ -172,6 +172,71 @@ def _render_compose(spines, leafs) -> str:
     return "".join(out)
 
 
+def write_frr_node_config(node_dir, name, ip, asn, spines, leafs, args):
+    node_dir.mkdir(parents=True, exist_ok=True)
+    (node_dir / "daemons").write_text(DAEMONS)
+    (node_dir / "vtysh.conf").write_text(VTYSH)
+
+    if name.startswith("spine"):
+        neighbors = "\n".join(
+            f" neighbor {lip} remote-as {lasn}"
+            for _, lip, lasn in leafs
+        )
+        activates = "\n".join(
+            f"  neighbor {lip} activate" for _, lip, _ in leafs
+        )
+    else:
+        spine_ip = spines[0][1]
+        neighbors = f" neighbor {spine_ip} remote-as {args.spine_as}"
+        activates = f"  neighbor {spine_ip} activate"
+
+    frr_conf = (
+        FRR_HEADER.format(hostname=name)
+        + f"router bgp {asn}\n"
+        + f" bgp router-id {router_id(ip)}\n"
+        + neighbors + "\n"
+        + " !\n"
+        + " address-family ipv4 unicast\n"
+        + activates + "\n"
+        + " exit-address-family\n"
+        + FRR_FOOTER
+    )
+    (node_dir / "frr.conf").write_text(frr_conf)
+
+
+def run_compose(lab_dir: Path, action: str, recreate: bool = False) -> None:
+    """
+    Runs docker compose for a lab using the lab-local
+    docker-compose.yml and .env.
+
+    """
+    env_file = lab_dir / ".env"
+    compose_file = lab_dir / "docker-compose.yml"
+
+    if not env_file.exists():
+        raise SystemExit(f"Missing {env_file}")
+    if not compose_file.exists():
+        raise SystemExit(f"Missing {compose_file}")
+
+    cmd = [
+        "docker", "compose",
+        "--env-file", str(env_file),
+        "-f", str(compose_file),
+    ]
+
+    if action == "up":
+        cmd += ["up", "-d"]
+        if recreate:
+            cmd.append("--force-recreate")
+    elif action == "down":
+        cmd += ["down", "--remove-orphans"]
+    else:
+        raise ValueError(f"Unsupported compose action: {action}")
+
+    print(f"[compose] {' '.join(cmd)}")
+    subprocess.run(cmd, check=True)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -187,8 +252,13 @@ def main() -> None:
     p.add_argument("--spine-as", type=int, default=65000)
     p.add_argument("--leaf-as-start", type=int, default=65101)
     p.add_argument("--ip-offset", type=int, default=11)
-    p.add_argument("--write-env", action="store_true")
     p.add_argument("--force", action="store_true")
+    p.add_argument(
+        "--up",
+        action="store_true",
+        help="Run docker compose up -d for this lab after generation."
+    )
+
     args = p.parse_args()
 
     lab = Path(args.lab).expanduser().resolve()
@@ -225,37 +295,7 @@ def main() -> None:
     # Write FRR trees
     for name, ip, asn in spines + leafs:
         node = frr_root / name
-        node.mkdir(parents=True, exist_ok=True)
-
-        (node / "daemons").write_text(DAEMONS)
-        (node / "vtysh.conf").write_text(VTYSH)
-
-        if name.startswith("spine"):
-            neighbors = "\n".join(
-                f" neighbor {lip} remote-as {lasn}"
-                for _, lip, lasn in leafs
-            )
-            activates = "\n".join(
-                f"  neighbor {lip} activate" for _, lip, _ in leafs
-            )
-        else:
-            spine_ip = spines[0][1]
-            neighbors = f" neighbor {spine_ip} remote-as {args.spine_as}"
-            activates = f"  neighbor {spine_ip} activate"
-
-        frr_conf = (
-            FRR_HEADER.format(hostname=name)
-            + f"router bgp {asn}\n"
-            + f" bgp router-id {router_id(ip)}\n"
-            + neighbors + "\n"
-            + " !\n"
-            + " address-family ipv4 unicast\n"
-            + activates + "\n"
-            + " exit-address-family\n"
-            + FRR_FOOTER
-        )
-
-        (node / "frr.conf").write_text(frr_conf)
+        write_frr_node_config(node, name, ip, asn, spines, leafs, args)
 
     # Always generate per-lab docker-compose.yml
     compose_path = lab / "docker-compose.yml"
@@ -268,29 +308,34 @@ def main() -> None:
     compose_path.write_text(compose_text)
     print(f"Generated compose: {compose_path}")
 
-    # Optional .env
-    if args.write_env:
-        # FRR_DIR must be relative to where docker compose is run (repo root)
-        # args.lab is already the correct relative path (e.g. labs/lab1)
-        frr_dir = f"./{Path(args.lab).as_posix()}/frr"
+    # Generate .env (derived output)
+    env_path = lab / ".env"
+    if env_path.exists() and not args.force:
+        raise SystemExit(
+            f"{env_path} already exists. Use --force to overwrite."
+        )
 
-        env = [
-            f"COMPOSE_PROJECT_NAME={lab.name}",
-            f"LAB_NAME={lab.name}",
-            f"FRR_DIR={frr_dir}",
-            f"FABRIC_SUBNET={subnet.with_prefixlen}",
-        ]
-        for name, ip, _ in spines + leafs:
-            env.append(f"{name.upper()}_IP={ip}")
+    frr_dir = "./frr"
 
-        (lab / ".env").write_text("\n".join(env) + "\n")
+    env = [
+        f"COMPOSE_PROJECT_NAME={lab.name}",
+        f"LAB_NAME={lab.name}",
+        f"FRR_DIR={frr_dir}",
+        f"FABRIC_SUBNET={subnet.with_prefixlen}",
+    ]
+
+    for name, ip, _ in sorted(spines + leafs):
+        env.append(f"{name.upper()}_IP={ip}")
+
+    env_path.write_text("\n".join(env) + "\n")
+
+    if args.up:
+        run_compose(lab, "up")
 
     print(f"Lab created: {lab}")
     print("Nodes:")
     for n, ip, asn in spines + leafs:
         print(f"  - {n:6} {ip} AS{asn}")
-    if args.write_env:
-        print("Generated .env (use with docker-compose.base.yml)")
 
 
 if __name__ == "__main__":

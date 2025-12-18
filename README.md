@@ -19,10 +19,10 @@ The design mirrors how modern **open network operating systems** (SONiC, Cumulus
 
 ```text
 .
-├── docker-compose.base.yml      # Shared compose file for all labs
 ├── build_frr_lab.py             # Lab generator script
 └── labs/
     └── lab1/
+        ├── docker-compose.yml   # Lab-specific docker compose file
         ├── .env                 # Lab-specific environment variables
         └── frr/
             ├── spine1/
@@ -69,8 +69,7 @@ cd OpenNetOs   # or your repo directory name
 
 ## Quick Start (TL;DR)
 ```sh
-python3 build_frr_lab.py --lab labs/lab1 --spines 1 --leafs 2 --write-env
-docker compose --env-file labs/lab1/.env -f /labs/lab1/docker-compose.yml up -d
+python3 build_frr_lab.py --lab labs/lab1 --spines 1 --leafs 2 --up
 docker exec -it lab1-spine1 vtysh -c "show ip bgp summary"
 ```
 
@@ -97,7 +96,7 @@ docker exec -it lab1-spine1 vtysh -c "show ip bgp summary"
 From the repository root, run:
 
 ```sh
-python3 build_frr_lab.py --lab labs/lab1 --spines 1 --leafs 2 --write-env
+python3 build_frr_lab.py --lab labs/lab1 --spines 1 --leafs 2 --up
 ```
 
 **What This Does:**
@@ -111,6 +110,7 @@ python3 build_frr_lab.py --lab labs/lab1 --spines 1 --leafs 2 --write-env
   - `LAB_NAME`
   - `FRR_DIR=./labs/lab1/frr`
   - IP assignments per node
+- Runs the docker compose "up" command to initiate the containers
 
 ---
 
@@ -126,7 +126,7 @@ _This is a classic eBGP leaf–spine underlay, matching modern data center fabri
 
 ---
 
-## Step 2: Start the Lab
+## Step 2: Start the Lab manually
 
 From the repository root:
 
@@ -208,12 +208,10 @@ docker compose up -d
 Create another lab:
 
 ```sh
-python3 build_frr_lab.py \
-  --lab labs/lab2 \
-  --write-env
+python3 build_frr_lab.py --lab labs/lab2 --spines 2 --leafs 4 --up
 ```
 
-Start it:
+Start it manually:
 
 ```sh
 docker compose --env-file labs/lab2/.env -f /labs/lab2/docker-compose.yml up -d
@@ -249,7 +247,7 @@ rm -rf labs/lab1
 
 ## Design Principles
 
-- **One shared Docker Compose file**
+- **Multiple labs can run and each lab is independent**
 - **Config-as-code**
 - **No hard-coded lab paths**
 - **Lab-specific state isolated under `labs/`**
