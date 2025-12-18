@@ -3,15 +3,14 @@
 build_frr_lab.py
 Generate an FRR lab directory:
   - frr/<node>/{daemons,frr.conf,vtysh.conf}
-  - .env file compatible with a shared docker-compose.base.yml
+  - .env file compatible with a docker-compose.yml
 
 Example:
   python3 build_frr_lab.py \
     --lab labs/lab1 \
-    --subnet 172.20.0.0/24 \
     --spines 1 \
     --leafs 2 \
-    --write-env
+    --up
 """
 
 from __future__ import annotations
@@ -233,7 +232,6 @@ def run_compose(lab_dir: Path, action: str, recreate: bool = False) -> None:
     else:
         raise ValueError(f"Unsupported compose action: {action}")
 
-    print(f"[compose] {' '.join(cmd)}")
     subprocess.run(cmd, check=True)
 
 
@@ -306,7 +304,6 @@ def main() -> None:
 
     compose_text = _render_compose(spines, leafs)
     compose_path.write_text(compose_text)
-    print(f"Generated compose: {compose_path}")
 
     # Generate .env (derived output)
     env_path = lab / ".env"
@@ -329,13 +326,14 @@ def main() -> None:
 
     env_path.write_text("\n".join(env) + "\n")
 
-    if args.up:
-        run_compose(lab, "up")
-
     print(f"Lab created: {lab}")
     print("Nodes:")
     for n, ip, asn in spines + leafs:
         print(f"  - {n:6} {ip} AS{asn}")
+
+    if args.up:
+        print("Starting lab containers...")
+        run_compose(lab, "up")
 
 
 if __name__ == "__main__":
