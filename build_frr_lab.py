@@ -119,6 +119,59 @@ def _auto_pick_subnet() -> ipaddress.IPv4Network:
     )
 
 
+def _compose_header() -> str:
+    return """\
+x-frr-node: &frr_node
+  image: quay.io/frrouting/frr:9.1.0
+  privileged: true
+  entrypoint:
+    - /bin/sh
+    - -lc
+    - |
+      mkdir -p /var/run/frr
+      chown -R frr:frr /etc/frr /var/run/frr || true
+      /usr/lib/frr/docker-start
+      tail -f /dev/null
+
+services:
+"""
+
+
+def _compose_service_block(node_name: str) -> str:
+    var_ip = f"{node_name.upper()}_IP"
+    return f"""\
+  {node_name}:
+    <<: *frr_node
+    container_name: ${{LAB_NAME}}-{node_name}
+    hostname: {node_name}
+    volumes:
+      - ${{FRR_DIR}}/{node_name}:/etc/frr
+    networks:
+      fabric:
+        ipv4_address: ${{{var_ip}}}
+
+"""
+
+
+def _compose_footer() -> str:
+    return """\
+networks:
+  fabric:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${FABRIC_SUBNET}
+"""
+
+
+def _render_compose(spines, leafs) -> str:
+    out = [_compose_header()]
+    for name, _, _ in spines + leafs:
+        out.append(_compose_service_block(name))
+    out.append(_compose_footer())
+    return "".join(out)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -203,6 +256,17 @@ def main() -> None:
         )
 
         (node / "frr.conf").write_text(frr_conf)
+
+    # Always generate per-lab docker-compose.yml
+    compose_path = lab / "docker-compose.yml"
+    if compose_path.exists() and not args.force:
+        raise SystemExit(
+            f"{compose_path} already exists. Re-run with --force to overwrite."
+        )
+
+    compose_text = _render_compose(spines, leafs)
+    compose_path.write_text(compose_text)
+    print(f"Generated compose: {compose_path}")
 
     # Optional .env
     if args.write_env:
