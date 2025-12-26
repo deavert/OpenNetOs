@@ -1,0 +1,3 @@
+[submodule "containerlabs/containerlab"]
+	path = containerlabs/containerlab
+	url = https://github.com/srl-labs/containerlab.git
