@@ -1,3 +1,6 @@
 [submodule "containerlabs/containerlab"]
 	path = containerlabs/containerlab
 	url = https://github.com/srl-labs/containerlab.git
+[submodule "containerlabs/srl-telemetry-lab"]
+	path = containerlabs/srl-telemetry-lab
+	url = https://github.com/srl-labs/srl-telemetry-lab.git
