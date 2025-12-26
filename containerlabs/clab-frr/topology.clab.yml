@@ -1,0 +1,44 @@
+name: frr-lab
+
+mgmt:
+  network: frr-lab-mgmt
+  ipv4-subnet: 172.20.20.0/24
+
+topology:
+  nodes:
+    spine1:
+      kind: linux
+      image: quay.io/frrouting/frr:latest
+      binds:
+        - ./frr/spine1:/etc/frr
+      exec:
+        - chown -R frr:frr /etc/frr || true
+        - mkdir -p /var/run/frr
+        - chown -R frr:frr /var/run/frr || true
+        - /usr/lib/frr/docker-start
+
+    leaf1:
+      kind: linux
+      image: quay.io/frrouting/frr:latest
+      binds:
+        - ./frr/leaf1:/etc/frr
+      exec:
+        - chown -R frr:frr /etc/frr || true
+        - mkdir -p /var/run/frr
+        - chown -R frr:frr /var/run/frr || true
+        - /usr/lib/frr/docker-start
+
+    leaf2:
+      kind: linux
+      image: quay.io/frrouting/frr:latest
+      binds:
+        - ./frr/leaf2:/etc/frr
+      exec:
+        - chown -R frr:frr /etc/frr || true
+        - mkdir -p /var/run/frr
+        - chown -R frr:frr /var/run/frr || true
+        - /usr/lib/frr/docker-start
+
+  links:
+    - endpoints: ["spine1:eth1", "leaf1:eth1"]
+    - endpoints: ["spine1:eth2", "leaf2:eth1"]
