@@ -1,44 +1,29 @@
-name: frr-lab
-
-mgmt:
-  network: frr-lab-mgmt
-  ipv4-subnet: 172.20.20.0/24
+name: frr-fabric
 
 topology:
+  defaults:
+    kind: linux
+    image: quay.io/frrouting/frr:master
+    binds:
+      - ./daemons:/etc/frr/daemons
+      - ./configs/__clabNodeName__.conf:/etc/frr/frr.conf # Each node will get its own config file
+      - ./vtysh.conf:/etc/frr/vtysh.conf
+  
   nodes:
-    spine1:
-      kind: linux
-      image: quay.io/frrouting/frr:latest
-      binds:
-        - ./frr/spine1:/etc/frr
-      exec:
-        - chown -R frr:frr /etc/frr || true
-        - mkdir -p /var/run/frr
-        - chown -R frr:frr /var/run/frr || true
-        - /usr/lib/frr/docker-start
-
-    leaf1:
-      kind: linux
-      image: quay.io/frrouting/frr:latest
-      binds:
-        - ./frr/leaf1:/etc/frr
-      exec:
-        - chown -R frr:frr /etc/frr || true
-        - mkdir -p /var/run/frr
-        - chown -R frr:frr /var/run/frr || true
-        - /usr/lib/frr/docker-start
-
-    leaf2:
-      kind: linux
-      image: quay.io/frrouting/frr:latest
-      binds:
-        - ./frr/leaf2:/etc/frr
-      exec:
-        - chown -R frr:frr /etc/frr || true
-        - mkdir -p /var/run/frr
-        - chown -R frr:frr /var/run/frr || true
-        - /usr/lib/frr/docker-start
+    spine1: {} # Looks for ./configs/spine1.conf
+    spine2: {} # Looks for ./configs/spine2.conf
+    leaf1:  {} # Looks for ./configs/leaf1.conf
+    leaf2:  {} # Looks for ./configs/leaf2.conf
+    leaf3:  {} # Looks for ./configs/leaf3.conf
+    leaf4:  {} # Looks for ./configs/leaf4.conf
+    # ... and so on for more leaves/spines
 
   links:
     - endpoints: ["spine1:eth1", "leaf1:eth1"]
     - endpoints: ["spine1:eth2", "leaf2:eth1"]
+    - endpoints: ["spine1:eth3", "leaf3:eth1"]
+    - endpoints: ["spine1:eth4", "leaf4:eth1"]
+    - endpoints: ["spine2:eth1", "leaf1:eth2"]
+    - endpoints: ["spine2:eth2", "leaf2:eth2"]
+    - endpoints: ["spine2:eth3", "leaf3:eth2"]
+    - endpoints: ["spine2:eth4", "leaf4:eth2"]
